@@ -1,6 +1,11 @@
 import requests
 import json
+import logging
+import re
 
+logging.basicConfig(level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s')
+license_finding_string = '^LICENSE*|^license*|^COPYING*|^copying*'
 
 def last_seen_repo():
     try:
@@ -12,25 +17,58 @@ def last_seen_repo():
         return 0
 
 
-def get_repos():
-    last_seen = last_seen_repo()
+def get_repos(**kwargs):
+    try:
+        last_seen = kwargs['last_seen']
+    except KeyError:
+        last_seen = last_seen_repo()
+    start_last_seen = last_seen
+    count = 0
+    pull_requests = 0
     r = requests.get('https://api.github.com/repositories?since=' + str(last_seen))
     if r.ok:
         j = json.loads(r.content)
         for repo in j:
-            print repo['id']
+            # is it a fork of something else?
+            if not repo['fork']:
+                # check for license
+                # if no license, make fork and pull request
+                pass
             last_seen = repo['id']
-    fout = open('last_repo_id.txt', 'w')
-    fout.write(str(last_seen))
+            count = count + 1
+
+    logging.info(str(count) + " repositories scanned, ending with #" + str(last_seen))
+    logging.info(str(pull_requests) + " pull request(s) made")
+
+    #fout = open('last_repo_id.txt', 'w')
+    #fout.write(str(last_seen))
+    return [count, last_seen, pull_requests]
 
 
 def has_license(repo):
-    pass
+    repo_name = repo['name']
+    owner = repo['owner']['login']
+    r = requests.get('https://api.github.com/repos/'+ owner + "/" + repo_name + '/contents/')
+    if r.ok:
+        j = json.loads(r.content)
+        for repo_file in j:
+            if re.search(license_finding_string, repo_file['name']):
+                return True
+        # for repo_file in j:
+        #     r = requests.get('http://raw.github.com/'+ owner + "/" + repo_name + '/master/' + repo_file['name'])
+        #     print r.content
+    return False
 
 
 def fork(repo):
     pass
 
 
-def pull_request(repo):
+def pull_request(fork):
     pass
+
+
+def fork_and_add_license(repo):
+    f = fork(repo)
+    pull_request(f)
+    return True
