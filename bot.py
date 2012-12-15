@@ -73,8 +73,10 @@ def has_license(repo):
     return False
 
 
-def fork(repo):
-    pass
+def fork(repo_name, owner):
+    r = requests.post('https://api.github.com/repos/' + owner + '/' + repo_name + '/forks?client_id=' + client_id)
+    logging.info(r.content)
+    return r.content
 
 
 def pull_request(fork):
@@ -82,6 +84,6 @@ def pull_request(fork):
 
 
 def fork_and_add_license(repo):
-    f = fork(repo)
+    f = fork(repo['name'], repo['owner']['login'])
     pull_request(f)
     return True
