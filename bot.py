@@ -2,10 +2,11 @@ import requests
 import json
 import logging
 import re
+from settings_dev import license_finding_string, client_id
 
 logging.basicConfig(level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s')
-license_finding_string = '^LICENSE*|^license*|^COPYING*|^copying*'
+
 
 def last_seen_repo():
     try:
@@ -22,10 +23,20 @@ def get_repos(**kwargs):
         last_seen = kwargs['last_seen']
     except KeyError:
         last_seen = last_seen_repo()
-    start_last_seen = last_seen
     count = 0
     pull_requests = 0
-    r = requests.get('https://api.github.com/repositories?since=' + str(last_seen))
+
+    # check rate limit
+    r = requests.get('https://api.github.com/rate_limit?client_id=' + client_id)
+    j = json.loads(r.content)
+    try:
+        logging.info("Rate limit status: " + str(j['rate']['remaining']) + " remaining")
+    except KeyError:
+        logging.error(str(j['message']))
+        return [0, 0, 0]
+
+    # if we still have hits, let's do this thing
+    r = requests.get('https://api.github.com/repositories?since=' + str(last_seen) + '&client_id=' + client_id)
     if r.ok:
         j = json.loads(r.content)
         for repo in j:
@@ -36,6 +47,8 @@ def get_repos(**kwargs):
                 pass
             last_seen = repo['id']
             count = count + 1
+    else:
+        logging.error("Connection to Github repositories endpoint failed.")
 
     logging.info(str(count) + " repositories scanned, ending with #" + str(last_seen))
     logging.info(str(pull_requests) + " pull request(s) made")
@@ -48,7 +61,7 @@ def get_repos(**kwargs):
 def has_license(repo):
     repo_name = repo['name']
     owner = repo['owner']['login']
-    r = requests.get('https://api.github.com/repos/'+ owner + "/" + repo_name + '/contents/')
+    r = requests.get('https://api.github.com/repos/'+ owner + "/" + repo_name + '/contents?client_id=' + client_id)
     if r.ok:
         j = json.loads(r.content)
         for repo_file in j:
